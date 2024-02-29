@@ -291,6 +291,109 @@ class QueryRenderChild extends MarkdownRenderChild {
         editTaskPencil.onClickEvent((event: MouseEvent) => {
             event.preventDefault();
 
+                        // RETASK: ADD
+            // Function executes when the pencil is left clicked.
+            async function asyncCall() {
+                // MAKE ARRAY FROM SOURCE FILE and splice the task out of it
+                const sourceFileArray = await app.vault.adapter
+                    .read(task.taskLocation.path)
+                    .then((fileString) => fileString.split('\n'));
+
+                sourceFileArray.splice(task.taskLocation.lineNumber, 1);
+
+                // IF THIS IS TRUE WE ARE USING THE SAME FILE FOR SOURCE AND DESTINATION SO SOMETHING IS WRONG
+                if (task.taskLocation.path == app.workspace.activeEditor?.file?.path) return;
+
+                // determine destination file. if the currently open file is today or the future then pen moves task to currently open file.
+                // if the currently open file is in the past, then pen moves the task to "today"
+                const pencilOpenFileDate = new Date(
+                    Date.parse(app.workspace.activeEditor?.file?.basename + ' 00:00:00'),
+                );
+                const today = new Date();
+                const fileInPast = pencilOpenFileDate < today;
+
+                const DD = today.getDate();
+                const MM = today.getMonth() + 1; // 0 is January, so we must add 1
+                const YYYY = today.getFullYear();
+
+                // below makes a string similar to this > periodic-notes/2024/2024-01/2024-01-08.md
+                const todayPathString =
+                    'periodic-notes/' +
+                    YYYY +
+                    '/' +
+                    YYYY +
+                    '-' +
+                    MM.toString().padStart(2, '0') +
+                    '/' +
+                    YYYY +
+                    '-' +
+                    MM.toString().padStart(2, '0') +
+                    '-' +
+                    DD.toString().padStart(2, '0') +
+                    '.md';
+
+                const todayYearFolderPathString = 'periodic-notes/' + YYYY;
+                const todayMonthFolderPathString =
+                    'periodic-notes/' + YYYY + '/' + YYYY + '-' + MM.toString().padStart(2, '0');
+
+                // MAKE ARRAY OUT OF DESTINATION FILE and make path if file doesn't exist. fill new file with template.
+                let destinationFileArray: any = [];
+
+                if (fileInPast) {
+                    if (await app.vault.adapter.exists(todayPathString)) {
+                        destinationFileArray = await app.vault.adapter
+                            .read(todayPathString)
+                            .then((result) => result.split('\n'));
+                    } else {
+                        // make year folder if it doesnt exist
+                        if (!(await app.vault.adapter.exists(todayYearFolderPathString))) {
+                            await app.vault.adapter.mkdir(todayYearFolderPathString);
+                        }
+                        // make month folder if it doesnt exist
+                        if (!(await app.vault.adapter.exists(todayMonthFolderPathString))) {
+                            await app.vault.adapter.mkdir(todayMonthFolderPathString);
+                        }
+
+                        let dailyTemplate = await app.vault.adapter.read('Templates/daily.md');
+                        dailyTemplate = dailyTemplate.replace(
+                            '<% tp.file.cursor() %><%* app.workspace.activeLeaf.view.editor?.focus(); %>',
+                            '',
+                        );
+                        await app.vault.create(todayPathString, dailyTemplate);
+                        destinationFileArray = await app.vault.adapter
+                            .read(todayPathString)
+                            .then((result) => result.split('\n'));
+                    }
+                } else {
+                    if (app.workspace.activeEditor?.file) {
+                        destinationFileArray = await app.vault.adapter
+                            .read(app.workspace.activeEditor?.file?.path)
+                            .then((result) => result.split('\n'));
+                    }
+                }
+
+                // DETERMINE RETASK INPUT LOCATION IN DESTINATION FILE
+                const markerString = '<= retask =>';
+                let lastloc = destinationFileArray?.lastIndexOf(markerString);
+
+                // LOGIC: if lastloc =-1 then not found so we just append line to destfile otherwise we use lastloc + 1
+                // we want to input at the end of the file or on top of the retask marker string
+                if (lastloc == -1) lastloc = destinationFileArray.length;
+                destinationFileArray.splice(lastloc, 0, task.originalMarkdown);
+
+                // if file is in the past then the destination of the write is today, if its today or the future the destination of the write is the open file in the window (this could be moved to block above)
+                if (fileInPast) {
+                    await app.vault.adapter.write(todayPathString!, destinationFileArray.join('\n'));
+                } else {
+                    await app.vault.adapter.write(
+                        app.workspace.activeEditor?.file?.path!,
+                        destinationFileArray.join('\n'),
+                    );
+                }
+                await app.vault.adapter.write(task.taskLocation.path, sourceFileArray.join('\n'));
+            }
+            asyncCall();
+
             const onSubmit = async (updatedTasks: Task[]): Promise<void> => {
                 await replaceTaskWithTasks({
                     originalTask: task,
@@ -305,7 +408,7 @@ class QueryRenderChild extends MarkdownRenderChild {
                 onSubmit,
                 allTasks,
             });
-            taskModal.open();
+            // taskModal.open(); //RETASK: REMOVE     
         });
     }
 
@@ -429,7 +532,97 @@ class QueryRenderChild extends MarkdownRenderChild {
         button.addEventListener('click', (ev: MouseEvent) => {
             ev.preventDefault(); // suppress the default click behavior
             ev.stopPropagation(); // suppress further event propagation
-            PostponeMenu.postponeOnClickCallback(button, task, amount, timeUnit);
+
+            // RETASK: ADD
+            // RETASK: This function acts when the arrows are left clicked.
+            async function asyncCall() {
+                // MAKE ARRAY FROM SOURCE FILE and splice the task out of it
+                const sourceFileArray = await app.vault.adapter
+                    .read(task.taskLocation.path)
+                    .then((fileString) => fileString.split('\n'));
+
+                sourceFileArray.splice(task.taskLocation.lineNumber, 1);
+
+                // IF THIS IS TRUE WE ARE USING THE SAME FILE FOR SOURCE AND DESTINATION SO SOMETHING IS WRONG
+                if (task.taskLocation.path == app.workspace.activeEditor?.file?.path) return;
+
+                //determine destination file (file names are dates so. find the date of the current open file and then add one to it)
+                const today = new Date();
+
+                const todayDD = today.getDate();
+                const todayMM = today.getMonth() + 1; // 0 is January, so we must add 1
+                const todayYYYY = today.getFullYear();
+
+                const ymdfmt = todayYYYY + '-' + todayMM.toString().padStart(2, '0') + '-' + todayDD.toString().padStart(2, '0');
+
+                const openFileDate = new Date(Date.parse(app.workspace.activeEditor?.file?.basename + ' 00:00:00'));
+                let targetDate = new Date(openFileDate.setDate(openFileDate.getDate() + 1));
+
+                const arrowsfileInPast = openFileDate < today;
+
+                if (arrowsfileInPast) {
+                    targetDate = new Date(ymdfmt + ' 00:00:00');
+                    targetDate.setDate(targetDate.getDate() + 1);
+                }
+
+                const DD = targetDate.getDate();
+                const MM = targetDate.getMonth() + 1; // 0 is January, so we must add 1
+                const YYYY = targetDate.getFullYear();
+
+                const targetDateString =
+                    MM.toString().padStart(2, '0') + '/' + DD.toString().padStart(2, '0') + '/' + YYYY;
+                // periodic-notes/2024/2024-01/2024-01-08.md
+                const targetPathString =
+                    'periodic-notes/' +
+                    YYYY +
+                    '/' +
+                    YYYY +
+                    '-' +
+                    MM.toString().padStart(2, '0') +
+                    '/' +
+                    YYYY +
+                    '-' +
+                    MM.toString().padStart(2, '0') +
+                    '-' +
+                    DD.toString().padStart(2, '0') +
+                    '.md';
+
+                // MAKE ARRAY OUT OF DESTINATION FILE
+                let destinationFileArray: any = [];
+
+                if (await app.vault.adapter.exists(targetPathString)) {
+                    destinationFileArray = await app.vault.adapter
+                        .read(targetPathString)
+                        .then((result) => result.split('\n'));
+                } else {
+                    let dailyTemplate = await app.vault.adapter.read('Templates/daily.md');
+                    dailyTemplate = dailyTemplate.replace(
+                        '<% tp.file.cursor() %><%* app.workspace.activeLeaf.view.editor?.focus(); %>',
+                        '',
+                    );
+                    await app.vault.create(targetPathString, dailyTemplate);
+                    destinationFileArray = await app.vault.adapter
+                        .read(targetPathString)
+                        .then((result) => result.split('\n'));
+
+                }
+
+                // DETERMINE RETASK INPUT LOCATION IN DESTINATION FILE
+                const markerString = '<= retask =>';
+                let lastloc = destinationFileArray?.lastIndexOf(markerString);
+
+                // LOGIC: if lastloc =-1 then not found so we just append line to destfile otherwise we use lastloc + 1
+                // we want to input at the end of the file or on top of the retask marker string
+                if (lastloc == -1) lastloc = destinationFileArray.length;
+                destinationFileArray.splice(lastloc, 0, task.originalMarkdown);
+
+                await app.vault.adapter.write(targetPathString, destinationFileArray.join('\n'));
+                await app.vault.adapter.write(task.taskLocation.path, sourceFileArray.join('\n'));
+            }
+            asyncCall();
+            
+            // PostponeMenu.postponeOnClickCallback(button, task, amount, timeUnit); //RETASK: remove
+
         });
 
         /** Open a context menu on right-click.
