@@ -1,12 +1,8 @@
 {
-  "id": "obsidian-tasks-plugin",
-  "name": "Tasks",
-  "version": "6.0.0",
-  "minAppVersion": "1.1.1",
-  "description": "Task management for Obsidian",
-  "helpUrl": "https://publish.obsidian.md/tasks/",
-  "author": "Martin Schenck and Clare Macrae",
-  "authorUrl": "https://github.com/obsidian-tasks-group",
-  "fundingUrl": "https://github.com/sponsors/claremacrae",
+  "id": "obsidian-retasks-plugin",
+  "name": "ReTask",
+  "version": "6.0.0-R",
+  "minAppVersion": "1.1.1-R",
+  "description": "ReTask management for Obsidian",
   "isDesktopOnly": false
 }
